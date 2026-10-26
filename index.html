@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>점대칭도형을 찾아라!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Jua', sans-serif;
+            background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        /* 팝업 애니메이션 */
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            70% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        @keyframes slideUp {
+            0% { transform: translateY(20px); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+
+        .pop-in { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .slide-up { animation: slideUp 0.3s ease-out forwards; }
+        
+        /* 피드백(정답/오답) 애니메이션 */
+        @keyframes feedback {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            30% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            70% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+        }
+        .feedback-anim {
+            animation: feedback 0.8s ease-in-out forwards;
+        }
+
+        /* 도형 180도 회전 힌트 애니메이션 */
+        .rotate-hint:hover svg {
+            transition: transform 1s ease-in-out;
+            transform: rotate(180deg);
+        }
+
+        /* 공통 그림자 및 버튼 스타일 */
+        .btn-shadow {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 4px 0px 0px #cfd8dc;
+        }
+        .btn-shadow:active {
+            transform: translateY(4px);
+            box-shadow: none;
+        }
+        .btn-blue { background-color: #3b82f6; box-shadow: 0 4px 0px 0px #2563eb; }
+        .btn-blue:active { box-shadow: 0 0px 0px 0px #2563eb; }
+        
+        .btn-red { background-color: #ef4444; box-shadow: 0 4px 0px 0px #dc2626; }
+        .btn-red:active { box-shadow: 0 0px 0px 0px #dc2626; }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex items-center justify-center">
+
+    <!-- 메인 앱 컨테이너 -->
+    <div id="app" class="relative w-full max-w-md h-full sm:h-[800px] bg-white sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+        
+        <!-- 시작 화면 -->
+        <div id="start-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-blue-50 z-20 transition-opacity duration-300">
+            <div class="pop-in text-center flex flex-col items-center">
+                <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-lg mb-4">
+                    <svg class="w-16 h-16 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </div>
+                <h1 class="text-4xl font-bold text-gray-800 mb-2 drop-shadow-sm">점대칭도형<br><span class="text-blue-500 text-5xl">분류 게임</span></h1>
+                <p class="text-gray-500 text-lg mb-8 mt-4 px-6 text-center">
+                    어떤 도형을 중심을 기준으로 <br><b>180도 돌렸을 때</b> 처음 도형과 <br>완전히 겹치면 '점대칭도형'입니다.<br><br>
+                    <span class="text-sm text-blue-400">* 도형에 마우스를 올리면(터치하면) 회전 힌트가 보입니다!</span>
+                </p>
+                <button onclick="startGame()" class="bg-blue-500 text-white text-2xl py-4 px-12 rounded-full font-bold btn-blue transition-all">
+                    게임 시작
+                </button>
+            </div>
+        </div>
+
+        <!-- 게임 화면 -->
+        <div id="game-screen" class="hidden flex-col h-full bg-slate-50 relative">
+            <!-- 상단 상태바 -->
+            <div class="flex justify-between items-center p-6 bg-white shadow-sm z-10">
+                <div class="text-xl font-bold text-gray-700">문제: <span id="current-round" class="text-blue-500">1</span> / 10</div>
+                <div class="text-xl font-bold text-gray-700">점수: <span id="score" class="text-green-500">0</span></div>
+            </div>
+
+            <!-- 프로그레스 바 -->
+            <div class="w-full bg-gray-200 h-2">
+                <div id="progress-bar" class="bg-blue-500 h-2 transition-all duration-300" style="width: 10%;"></div>
+            </div>
+
+            <!-- 도형 표시 영역 -->
+            <div class="flex-1 flex flex-col items-center justify-center p-6 relative">
+                <h2 id="shape-name" class="text-3xl font-bold text-gray-700 mb-8 absolute top-8">도형 이름</h2>
+                
+                <div id="shape-container" class="w-64 h-64 bg-white rounded-2xl shadow-lg flex items-center justify-center rotate-hint cursor-pointer pop-in">
+                    <!-- SVG가 여기에 삽입됨 -->
+                </div>
+            </div>
+
+            <!-- 하단 버튼 영역 -->
+            <div class="p-6 pb-10 grid grid-cols-2 gap-4">
+                <button onclick="checkAnswer(true)" class="bg-green-100 border-4 border-green-400 text-green-600 rounded-2xl py-6 flex flex-col items-center justify-center btn-shadow transition-transform active:scale-95">
+                    <span class="text-5xl font-bold mb-2">O</span>
+                    <span class="text-lg">점대칭도형 맞음</span>
+                </button>
+                <button onclick="checkAnswer(false)" class="bg-red-100 border-4 border-red-400 text-red-600 rounded-2xl py-6 flex flex-col items-center justify-center btn-shadow transition-transform active:scale-95">
+                    <span class="text-5xl font-bold mb-2">X</span>
+                    <span class="text-lg">점대칭도형 아님</span>
+                </button>
+            </div>
+
+            <!-- 정답/오답 피드백 오버레이 -->
+            <div id="feedback" class="hidden absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none">
+                <img id="feedback-img" src="" alt="feedback" class="w-48 h-48 drop-shadow-2xl">
+            </div>
+        </div>
+
+        <!-- 결과 화면 -->
+        <div id="end-screen" class="hidden absolute inset-0 flex-col items-center justify-center bg-white z-30 transition-opacity duration-300">
+            <div class="pop-in text-center flex flex-col items-center w-full px-6">
+                <h1 class="text-5xl font-bold text-gray-800 mb-6">게임 종료!</h1>
+                
+                <div class="bg-blue-50 rounded-3xl p-8 w-full max-w-sm mb-8 shadow-inner">
+                    <p class="text-2xl text-gray-600 mb-2">최종 점수</p>
+                    <p class="text-7xl font-bold text-blue-500"><span id="final-score">0</span><span class="text-3xl text-gray-500">점</span></p>
+                    <p id="result-message" class="mt-4 text-xl text-gray-700"></p>
+                </div>
+
+                <button onclick="resetGame()" class="bg-blue-500 text-white text-2xl py-4 px-12 rounded-full font-bold btn-blue transition-all w-full max-w-xs">
+                    다시 하기
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // 도형 데이터 (SVG 및 점대칭 여부)
+        const shapeData = [
+            // 점대칭도형 (O)
+            { name: "평행사변형", isSymmetric: true, svg: `<svg width="180" height="180" viewBox="0 0 200 200"><polygon points="40,150 100,50 180,50 120,150" fill="#8b5cf6" stroke="#5b21b6" stroke-width="4" stroke-linejoin="round"/></svg>` },
+            { name: "직사각형", isSymmetric: true, svg: `<svg width="180" height="180" viewBox="0 0 200 200"><rect x="20" y="50" width="160" height="100" fill="#3b82f6" stroke="#1d4ed8" stroke-width="4" rx="8"/></svg>` },
+            { name: "정육각형", isSymmetric: true, svg: `<svg width="180" height="180" viewBox="0 0 200 200"><polygon points="50,20 150,20 200,100 150,180 50,180 0,100" fill="#10b981" stroke="#047857" stroke-width="4" stroke-linejoin="round"/></svg>` },
+            { name: "마름모", isSymmetric: true, svg: `<svg width="180" height="180" viewBox="0 0 200 200"><polygon points="100,10 170,100 100,190 30,100" fill="#f59e0b" stroke="#b45309" stroke-width="4" stroke-linejoin="round"/></svg>` },
+            { name: "원", isSymmetric: true, svg: `<svg width="180" height="180" viewBox="0 0 200 200"><circle cx="100" cy="100" r="80" fill="#ec4899" stroke="#be185d" stroke-width="4"/></svg>` },
+            { name: "알파벳 N", isSymmetric: true, svg: `<svg width="180" height="180" viewBox="0 0 200 200"><path d="M40,180 L40,20 L80,20 L140,130 L140,20 L170,20 L170,180 L130,180 L70,70 L70,180 Z" fill="#6366f1" stroke="#4338ca" stroke-width="2" stroke-linejoin="round"/></svg>` },
+            
+            // 점대칭도형 아님 (X)
+            { name: "정삼각형", isSymmetric: false, svg: `<svg width="180" height="180" viewBox="0 0 200 200"><polygon points="100,20 180,160 20,160" fill="#ef4444" stroke="#b91c1c" stroke-width="4" stroke-linejoin="round"/></svg>` },
+            { name: "이등변삼각형", isSymmetric: false, svg: `<svg width="180" height="180" viewBox="0 0 200 200"><polygon points="100,20 150,180 50,180" fill="#06b6d4" stroke="#0e7490" stroke-width="4" stroke-linejoin="round"/></svg>` },
+            { name: "사다리꼴", isSymmetric: false, svg: `<svg width="180" height="180" viewBox="0 0 200 200"><polygon points="60,40 140,40 180,160 20,160" fill="#eab308" stroke="#a16207" stroke-width="4" stroke-linejoin="round"/></svg>` },
+            { name: "정오각형", isSymmetric: false, svg: `<svg width="180" height="180" viewBox="0 0 200 200"><polygon points="100,10 190,75 155,180 45,180 10,75" fill="#a855f7" stroke="#7e22ce" stroke-width="4" stroke-linejoin="round"/></svg>` },
+            { name: "하트", isSymmetric: false, svg: `<svg width="180" height="180" viewBox="0 0 200 200"><path d="M100,180 C-40,90 20,-20 100,40 C180,-20 240,90 100,180 Z" fill="#f43f5e" stroke="#be123c" stroke-width="4" stroke-linejoin="round"/></svg>` },
+            { name: "알파벳 A", isSymmetric: false, svg: `<svg width="180" height="180" viewBox="0 0 200 200"><path d="M100,20 L160,180 L125,180 L112,140 L88,140 L75,180 L40,180 Z M95,115 L105,115 L100,75 Z" fill="#14b8a6" stroke="#0f766e" stroke-width="4" fill-rule="evenodd"/></svg>` }
+        ];
+
+        let gameQuestions = [];
+        let currentQuestionIndex = 0;
+        let score = 0;
+        const totalRounds = 10;
+        let isProcessing = false;
+
+        // 게임 상태 초기화 및 시작
+        function startGame() {
+            document.getElementById('start-screen').classList.add('opacity-0');
+            setTimeout(() => {
+                document.getElementById('start-screen').classList.add('hidden');
+                document.getElementById('game-screen').classList.remove('hidden');
+                document.getElementById('game-screen').classList.add('flex');
+                
+                resetGameState();
+                loadQuestion();
+            }, 300);
+        }
+
+        // 상태 초기화
+        function resetGameState() {
+            score = 0;
+            currentQuestionIndex = 0;
+            updateScoreDisplay();
+            
+            // 문제 섞기 (랜덤하게 10개 선택 혹은 전체 섞기)
+            gameQuestions = shuffleArray([...shapeData]).slice(0, totalRounds);
+        }
+
+        // 배열 셔플 함수
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // 문제 화면에 표시
+        function loadQuestion() {
+            if (currentQuestionIndex >= totalRounds) {
+                showResults();
+                return;
+            }
+
+            const currentShape = gameQuestions[currentQuestionIndex];
+            
+            // UI 업데이트
+            document.getElementById('current-round').textContent = currentQuestionIndex + 1;
+            document.getElementById('progress-bar').style.width = `${((currentQuestionIndex + 1) / totalRounds) * 100}%`;
+            
+            const shapeNameEl = document.getElementById('shape-name');
+            const shapeContainerEl = document.getElementById('shape-container');
+            
+            // 애니메이션 재적용을 위해 클래스 제거 후 추가
+            shapeContainerEl.classList.remove('pop-in');
+            void shapeContainerEl.offsetWidth; // 리플로우 강제 트리거
+            
+            shapeNameEl.textContent = currentShape.name;
+            shapeContainerEl.innerHTML = currentShape.svg;
+            shapeContainerEl.classList.add('pop-in');
+            
+            isProcessing = false;
+        }
+
+        // 정답 확인
+        function checkAnswer(userChoice) {
+            if (isProcessing) return; // 중복 클릭 방지
+            isProcessing = true;
+
+            const currentShape = gameQuestions[currentQuestionIndex];
+            const isCorrect = (userChoice === currentShape.isSymmetric);
+
+            showFeedback(isCorrect);
+
+            if (isCorrect) {
+                score += 10;
+                updateScoreDisplay();
+            }
+
+            // 다음 문제로 넘어감
+            setTimeout(() => {
+                currentQuestionIndex++;
+                loadQuestion();
+            }, 1000);
+        }
+
+        function updateScoreDisplay() {
+            document.getElementById('score').textContent = score;
+        }
+
+        // O / X 피드백 애니메이션
+        function showFeedback(isCorrect) {
+            const feedbackEl = document.getElementById('feedback');
+            const imgEl = document.getElementById('feedback-img');
+
+            // 간단하게 O, X 텍스트를 SVG로 생성하여 사용 (외부 이미지 의존성 제거)
+            if (isCorrect) {
+                imgEl.src = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="none" stroke="%2322c55e" stroke-width="15" stroke-dasharray="250" stroke-dashoffset="0"/></svg>`;
+            } else {
+                imgEl.src = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><line x1="20" y1="20" x2="80" y2="80" stroke="%23ef4444" stroke-width="15" stroke-linecap="round"/><line x1="80" y1="20" x2="20" y2="80" stroke="%23ef4444" stroke-width="15" stroke-linecap="round"/></svg>`;
+            }
+
+            feedbackEl.classList.remove('hidden');
+            feedbackEl.classList.remove('feedback-anim');
+            void feedbackEl.offsetWidth; // 리플로우
+            feedbackEl.classList.add('feedback-anim');
+
+            setTimeout(() => {
+                feedbackEl.classList.add('hidden');
+            }, 800);
+        }
+
+        // 결과 화면 표시
+        function showResults() {
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('flex');
+            
+            const endScreen = document.getElementById('end-screen');
+            endScreen.classList.remove('hidden');
+            endScreen.classList.add('flex');
+            
+            document.getElementById('final-score').textContent = score;
+            
+            const messageEl = document.getElementById('result-message');
+            if (score === 100) {
+                messageEl.textContent = "완벽해요! 점대칭도형 마스터!";
+            } else if (score >= 70) {
+                messageEl.textContent = "참 잘했어요! 조금만 더 연습해볼까요?";
+            } else {
+                messageEl.textContent = "다시 한번 도전해서 100점을 맞아보세요!";
+            }
+        }
+
+        // 게임 초기화 및 재시작
+        function resetGame() {
+            document.getElementById('end-screen').classList.add('hidden');
+            document.getElementById('end-screen').classList.remove('flex');
+            
+            document.getElementById('start-screen').classList.remove('hidden');
+            document.getElementById('start-screen').classList.remove('opacity-0');
+        }
+    </script>
+</body>
+</html>
